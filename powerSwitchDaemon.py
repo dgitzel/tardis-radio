@@ -1,19 +1,21 @@
-import RPi.GPIO as GPIO
 import os
 from time import sleep
 
-powerSwitchPin = 22
-keepAlivePin = 23
+import RPi.GPIO as GPIO
+
+from constants import POWER_SWITCH_PIN, KEEP_ALIVE_PIN, POLL_INTERVAL_IN_SEC, SHUTDOWN_NOW, STOP_RADIO_SERVICE
+
+PLAY_SHUTDOWN_SFX = "play -q /home/pi/tardis-radio/media/administrative/lowbattery.mp3 2>/dev/null"
 
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(powerSwitchPin, GPIO.IN)
-GPIO.setup(keepAlivePin, GPIO.OUT)
+GPIO.setup(POWER_SWITCH_PIN, GPIO.IN)
+GPIO.setup(KEEP_ALIVE_PIN, GPIO.OUT)
 
 while True:
-    GPIO.output(keepAlivePin, GPIO.HIGH)
-    if not GPIO.input(powerSwitchPin):
-        os.system("sudo systemctl stop tardis-radio.service")
-        os.system("play -q /home/pi/tardis-radio/media/administrative/lowbattery.mp3 2>/dev/null")
-        os.system("sudo poweroff")
+    GPIO.output(KEEP_ALIVE_PIN, GPIO.HIGH)
+    if not GPIO.input(POWER_SWITCH_PIN):
+        os.system(STOP_RADIO_SERVICE)
+        os.system(PLAY_SHUTDOWN_SFX)
+        os.system(SHUTDOWN_NOW)
         sleep(30)
-    sleep(0.05)
+    sleep(POLL_INTERVAL_IN_SEC)

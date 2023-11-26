@@ -1,57 +1,69 @@
-import os
+import os.path
+from os import system
 import subprocess
+from typing import Optional
 
 from constants import KILL_SOX_PLAYER
 
 
 class SoxPlayer:
-    '''
+    """
     A wrapper for SoX program. SoX is invoked through shell commands spawned by Python subprocesses
     requirements:
         sudo apt install sox libsox-fmt-all bc
-    '''
-    currentlyPlayingProcess = None
-    tardisPath = None
+    """
 
-    # pass the tardis mp3's path through upon instantiation
-    def __init__(self, tardisPath=None) -> None:
-        if tardisPath != None:
-            self.tardisPath = tardisPath
-        pass
+    def __init__(self, sfx_file: Optional[str] = os.path.devnull) -> None:
+        self.sox_process = None
+        self.sfx_file = sfx_file
 
-    def play(self, songPath, blocking=False):
+    def play(self, song_path: str, blocking: bool = False) -> None:
+        """
+        PLay a song from a file via SoX.
+        """
         self.stop()
 
         if blocking:
-            os.system(f"AUDIODEV=hw:1,0 /usr/bin/play -q '{songPath}' 2>/dev/null")
+            system(f"AUDIODEV=hw:1,0 /usr/bin/play -q '{song_path}' 2>/dev/null")
         else:
-            self.currentlyPlayingProcess = subprocess.Popen(['sox', '-V0', '-q', songPath, '-d'])
+            self.sox_process = subprocess.Popen(['sox', '-V0', '-q', song_path, '-d'])
 
-    def tune_and_play(self, songPath, percentage=0.5):
-        '''
-        stop the current song, play the tardis sound while fading-in the new song.
+    def tune_and_play(self, song_path: str, percentage: float = 0.5) -> None:
+        """
+        Stop the current song, play the tuning sound while fading-in the new song.
         The new song will begin @percentage of the way through (function argument)
-        '''
+        """
+        if self.sfx_file is None:
+            self.play(song_path)
 
         # kill old song
         self.stop()
 
-        # find the starting position of the song using the length of the song * percentage. The length is got by soxi and the calculation by bc
-        songStartingPosition = subprocess.check_output(f"echo $(soxi -D \"{songPath}\")*{percentage}/1 | bc",
-                                                       shell=True, universal_newlines=True)
+        # find the starting position of the song using the length of the song * percentage.
+        # The length is got by soxi and the calculation by bc
+        song_starting_position = subprocess.check_output(
+            f"echo $(soxi -D \"{song_path}\")*{percentage}/1 | bc",
+            shell=True, universal_newlines=True)
 
-        # play the tardis and the new song together, but fade the new song in allowing time for the tardis to be heard on its own
+        # play the sfx and the new song together
+        # fade the new song in allowing time for the tuning to be heard
         cmd1 = subprocess.Popen(
-            ['sox', '-V0', '-q', songPath, '-p', 'trim', f'{int(songStartingPosition)}', 'fade', '5'],
+            ['sox', '-V0', '-q', song_path, '-p', 'trim', f'{int(song_starting_position)}', 'fade', '5'],
             stdout=subprocess.PIPE)
-        self.currentlyPlayingProcess = subprocess.Popen(['sox', '-V0', '-q', '-', '-m', self.tardisPath, '-d'],
-                                                        stdin=cmd1.stdout)
+        self.sox_process = subprocess.Popen(
+            ['sox', '-V0', '-q', '-', '-m', self.sfx_file, '-d'],
+            stdin=cmd1.stdout)
 
     def stop(self):
-        os.system(KILL_SOX_PLAYER)
+        """
+        Stop all songs currently playing.
+        """
+        if self.is_playing:
+            system(KILL_SOX_PLAYER)
 
+    @property
     def is_playing(self):
-        if self.currentlyPlayingProcess == None or self.currentlyPlayingProcess.poll() != None:
+        if self.sox_process is None:
             return False
         else:
-            return True
+            return self.sox_process.poll() is None
